@@ -35,6 +35,9 @@ data_ptr:   .res 2              ; Pointer to current position in music data
 loop_ptr:   .res 2              ; Pointer to loop start position
 wait_count: .res 2              ; Frames to wait (16-bit)
 temp:       .res 1              ; Temporary storage
+vol_a:      .res 1              ; Channel A volume (0-15)
+vol_b:      .res 1              ; Channel B volume (0-15)
+vol_c:      .res 1              ; Channel C volume (0-15)
 
 ;-----------------------------------------------------------------------------
 ; BSS segment (uninitialized data)
@@ -81,6 +84,11 @@ temp:       .res 1              ; Temporary storage
         sta     loop_ptr
         sta     loop_ptr+1
 
+        ; Clear volume trackers
+        sta     vol_a
+        sta     vol_b
+        sta     vol_c
+
         ; Skip A2M header (16 bytes)
         clc
         lda     data_ptr
@@ -96,6 +104,7 @@ temp:       .res 1              ; Temporary storage
         bcs     @done           ; Carry set = end of song
 
         jsr     wait_frame      ; Wait for next frame (60Hz timing)
+        jsr     show_visualizer ; Update volume display
 
         ; Check for keypress to exit
         lda     KEYBOARD
@@ -149,6 +158,79 @@ temp:       .res 1              ; Temporary storage
 .endproc
 
 ;-----------------------------------------------------------------------------
+; show_visualizer - Display simple volume bars for 3 channels
+; Uses direct screen memory writes for speed
+;-----------------------------------------------------------------------------
+SCREEN_LINE5 = $0680            ; Line 5 of text screen (for visualizer)
+
+.proc show_visualizer
+        ; Channel A bar
+        ldx     #0              ; Screen position
+        lda     vol_a
+        and     #$0F            ; Mask to 0-15
+        jsr     draw_bar
+
+        ; Channel B bar
+        ldx     #14             ; Screen position
+        lda     vol_b
+        and     #$0F
+        jsr     draw_bar
+
+        ; Channel C bar
+        ldx     #28             ; Screen position
+        lda     vol_c
+        and     #$0F
+        jsr     draw_bar
+
+        rts
+.endproc
+
+;-----------------------------------------------------------------------------
+; draw_bar - Draw a volume bar
+; Input: A = volume (0-15), X = screen offset
+;-----------------------------------------------------------------------------
+.proc draw_bar
+        sta     temp            ; Save volume
+        tay                     ; Y = volume (bar length)
+        beq     @clear_all      ; If volume is 0, clear entire bar
+
+        ; Draw filled part (use inverse block character $A0)
+@draw_filled:
+        lda     #$20            ; Inverse space (solid block)
+        sta     SCREEN_LINE5,x
+        inx
+        dey
+        bne     @draw_filled
+
+        ; Clear remaining part (up to 15 chars)
+        lda     #15
+        sec
+        sbc     temp            ; A = 15 - volume = empty chars
+        tay
+        beq     @done
+
+@clear_rest:
+        lda     #$A0            ; Normal space
+        sta     SCREEN_LINE5,x
+        inx
+        dey
+        bne     @clear_rest
+        jmp     @done
+
+@clear_all:
+        ldy     #15
+@clear_loop:
+        lda     #$A0            ; Normal space
+        sta     SCREEN_LINE5,x
+        inx
+        dey
+        bne     @clear_loop
+
+@done:
+        rts
+.endproc
+
+;-----------------------------------------------------------------------------
 ; play_frame - Process music data until we hit a wait command
 ; Output: Carry clear = continue, Carry set = end of song
 ;-----------------------------------------------------------------------------
@@ -179,8 +261,25 @@ temp:       .res 1              ; Temporary storage
         ldy     #0
         lda     (data_ptr),y    ; A = value
         tax                     ; X = value
-        lda     temp            ; A = register
 
+        ; Track volume for visualizer (registers 8, 9, 10)
+        lda     temp
+        cmp     #8
+        bne     @not_vol_a
+        stx     vol_a
+        jmp     @do_write
+@not_vol_a:
+        cmp     #9
+        bne     @not_vol_b
+        stx     vol_b
+        jmp     @do_write
+@not_vol_b:
+        cmp     #10
+        bne     @do_write
+        stx     vol_c
+
+@do_write:
+        lda     temp            ; A = register
         jsr     mb_write        ; Write to Mockingboard (A=reg, X=val)
 
         jsr     inc_data_ptr    ; Move past value byte
@@ -300,8 +399,8 @@ temp:       .res 1              ; Temporary storage
 .segment "RODATA"
 
 msg_title:
-        .byte   "MOCKINGBOARD MUSIC PLAYER", $0D
-        .byte   "-------------------------", $00
+        .byte   "   HONUX MUSIC PLAYER", $0D
+        .byte   "   ==================", $00
 
 msg_playing:
         .byte   "PLAYING... (ESC TO STOP)", $00

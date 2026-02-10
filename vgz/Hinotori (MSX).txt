@@ -1,0 +1,60 @@
+***********************************************
+* VGM music package                           *
+* http://vgmrips.net/                         *
+***********************************************
+Game name:           Hinotori: Hō-ō Hen
+System:              MSX2
+Music hardware:      AY-3-8910
+
+Music author:        Yoshinori Sasaki,
+                     Motoaki Furukawa,
+                     Fumio Miyashita,
+                     Iku Mizutani
+Game developer:      Konami
+Game publisher:      Konami
+Game release date:   1987
+
+Package created by:  shywolf
+Package version:     1.01
+
+Song list, in approximate game order:
+Song name                           Length:
+                                    Total  Loop
+01 Title                            0:09   -
+02 Game Start                       0:02   -
+03 Main BGM 1                       1:04   1:01
+04 Boss                             0:27   0:26
+05 Stage Select                     0:10   0:10
+06 Main BGM 2                       0:32   0:30
+07 Last Boss                        0:38   0:13
+08 Ending                           0:27   0:09
+09 Staff                            0:34   0:34
+10 Death                            0:03   -
+11 Game Over                        0:05   -
+
+Total Length                        4:11   7:14
+
+
+Notes:
+Pack was made using
+NEZplug 0.9.4.8+2+19.20 VGM mod
+and .KSS file from http://kss.joshw.info/MSX/.
+
+This game is based on the fifth volume of the
+Osamu Tezuka manga series of the same title.
+Konami released a Famicom game also, utilizing
+the same source material. Tracks 01 and 08
+borrow some melodies from the ending song of
+the 1986 film adaptation of Hō-ō Hen, which was
+composed by Fumio Miyashita. It can be found on
+the album "Hinotori" (07SH-2012).
+
+One of my favourite video game soundtracks.
+Having watched several of the Hinotori OVAs and
+films at a young age, both it and the game also
+have a strong nostalgic feeling for me.
+
+
+Package history:
+1.00 2017-03-27 shywolf: Initial release.
+1.01 2017-04-13 Valley Bell: Increased volume.

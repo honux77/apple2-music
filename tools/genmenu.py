@@ -46,8 +46,8 @@ def generate_menu(a2m_files):
 
     # Header - song menu
     lines.append('20 HOME')
-    lines.append('25 PRINT "MOCKINGBOARD MUSIC PLAYER"')
-    lines.append('30 PRINT "========================="')
+    lines.append('25 PRINT "   HONUX MUSIC PLAYER"')
+    lines.append('30 PRINT "   =================="')
     lines.append('35 PRINT "        (SLOT ";PEEK(768);")"')
     lines.append('40 PRINT')
     lines.append('50 PRINT "SELECT A SONG:"')

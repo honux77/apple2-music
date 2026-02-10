@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gunzip:*)",
+      "Bash(xxd:*)",
+      "WebSearch",
+      "WebFetch(domain:vgmrips.net)",
+      "WebFetch(domain:www.deater.net)",
+      "WebFetch(domain:nicole.express)",
+      "WebFetch(domain:www.msx.org)",
+      "WebFetch(domain:apple2.org.za)",
+      "WebFetch(domain:gswv.apple2.org.za)",
+      "Bash(chmod:*)",
+      "Bash(python3:*)",
+      "Bash(make:*)",
+      "Bash(brew search:*)",
+      "Bash(/usr/sbin/ac:*)",
+      "Bash(curl:*)",
+      "Bash(java:*)",
+      "Bash(source:*)",
+      "Bash(sdk install:*)",
+      "Bash(sdk list:*)",
+      "Bash(export SDKMAN_DIR=\"/Users/honux/.sdkman\")",
+      "Bash(ls:*)",
+      "Bash(ca65:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(file:*)",
+      "Bash(pip3 install:*)"
+    ]
+  }
+}
