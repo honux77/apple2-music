@@ -12,16 +12,18 @@
         .word   $9000           ; Load address
 
 ;-----------------------------------------------------------------------------
+; System addresses
+;-----------------------------------------------------------------------------
+DOSWARM = $03D0                 ; DOS/ProDOS warm start - returns to BASIC ]
+
+;-----------------------------------------------------------------------------
 ; Startup segment
 ;-----------------------------------------------------------------------------
 .segment "STARTUP"
 
 ;-----------------------------------------------------------------------------
-; Entry point - called via CALL 2051 from BASIC
+; Entry point - called via CALL 36864 from BASIC
 ;-----------------------------------------------------------------------------
 start:
-        ; Jump to main player code
-        jsr     main
-
-        ; Return to BASIC (CALL sets up return address)
-        rts
+        jsr     main            ; Run player
+        jmp     DOSWARM         ; Return to BASIC ] prompt

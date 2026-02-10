@@ -38,6 +38,7 @@ temp:       .res 1              ; Temporary storage
 vol_a:      .res 1              ; Channel A volume (0-15)
 vol_b:      .res 1              ; Channel B volume (0-15)
 vol_c:      .res 1              ; Channel C volume (0-15)
+bar_ptr:    .res 2              ; Pointer to screen line for bar drawing
 
 ;-----------------------------------------------------------------------------
 ; BSS segment (uninitialized data)
@@ -161,23 +162,34 @@ vol_c:      .res 1              ; Channel C volume (0-15)
 ; show_visualizer - Display simple volume bars for 3 channels
 ; Uses direct screen memory writes for speed
 ;-----------------------------------------------------------------------------
-SCREEN_LINE5 = $0680            ; Line 5 of text screen (for visualizer)
+SCREEN_LINE6  = $0700            ; Line 6 of text screen (Channel A)
+SCREEN_LINE8  = $0428            ; Line 8 of text screen (Channel B)
+SCREEN_LINE10 = $0528            ; Line 10 of text screen (Channel C)
 
 .proc show_visualizer
-        ; Channel A bar
-        ldx     #0              ; Screen position
+        ; Channel A bar - line 6
+        lda     #<SCREEN_LINE6
+        sta     bar_ptr
+        lda     #>SCREEN_LINE6
+        sta     bar_ptr+1
         lda     vol_a
         and     #$0F            ; Mask to 0-15
         jsr     draw_bar
 
-        ; Channel B bar
-        ldx     #14             ; Screen position
+        ; Channel B bar - line 8
+        lda     #<SCREEN_LINE8
+        sta     bar_ptr
+        lda     #>SCREEN_LINE8
+        sta     bar_ptr+1
         lda     vol_b
         and     #$0F
         jsr     draw_bar
 
-        ; Channel C bar
-        ldx     #28             ; Screen position
+        ; Channel C bar - line 10
+        lda     #<SCREEN_LINE10
+        sta     bar_ptr
+        lda     #>SCREEN_LINE10
+        sta     bar_ptr+1
         lda     vol_c
         and     #$0F
         jsr     draw_bar
@@ -187,43 +199,38 @@ SCREEN_LINE5 = $0680            ; Line 5 of text screen (for visualizer)
 
 ;-----------------------------------------------------------------------------
 ; draw_bar - Draw a volume bar
-; Input: A = volume (0-15), X = screen offset
+; Input: A = volume (0-15), bar_ptr = screen line address
 ;-----------------------------------------------------------------------------
 .proc draw_bar
         sta     temp            ; Save volume
         tay                     ; Y = volume (bar length)
         beq     @clear_all      ; If volume is 0, clear entire bar
 
-        ; Draw filled part (use inverse block character $A0)
+        ; Draw filled part (use inverse block character)
+        ldy     #0
 @draw_filled:
         lda     #$20            ; Inverse space (solid block)
-        sta     SCREEN_LINE5,x
-        inx
-        dey
+        sta     (bar_ptr),y
+        iny
+        cpy     temp
         bne     @draw_filled
 
         ; Clear remaining part (up to 15 chars)
-        lda     #15
-        sec
-        sbc     temp            ; A = 15 - volume = empty chars
-        tay
-        beq     @done
-
 @clear_rest:
+        cpy     #15
+        beq     @done
         lda     #$A0            ; Normal space
-        sta     SCREEN_LINE5,x
-        inx
-        dey
-        bne     @clear_rest
-        jmp     @done
+        sta     (bar_ptr),y
+        iny
+        jmp     @clear_rest
 
 @clear_all:
-        ldy     #15
+        ldy     #0
 @clear_loop:
         lda     #$A0            ; Normal space
-        sta     SCREEN_LINE5,x
-        inx
-        dey
+        sta     (bar_ptr),y
+        iny
+        cpy     #15
         bne     @clear_loop
 
 @done:
