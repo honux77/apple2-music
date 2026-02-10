@@ -1,27 +1,9 @@
 ;-----------------------------------------------------------------------------
 ; Mockingboard Driver for Apple II
-; Supports AY-3-8910 PSG chips in Slot 4
+; Supports AY-3-8910 PSG chips with configurable slot
 ;-----------------------------------------------------------------------------
 
-.export mb_init, mb_reset, mb_write, mb_silence
-
-;-----------------------------------------------------------------------------
-; Mockingboard hardware addresses (Slot 4)
-;-----------------------------------------------------------------------------
-MB_SLOT     = 4
-MB_BASE     = $C000 + (MB_SLOT * $100)   ; $C400
-
-; 6522 VIA #1 (Chip 1)
-VIA1_ORB    = MB_BASE + $00     ; $C400 - Output Register B (control)
-VIA1_ORA    = MB_BASE + $01     ; $C401 - Output Register A (data)
-VIA1_DDRB   = MB_BASE + $02     ; $C402 - Data Direction Register B
-VIA1_DDRA   = MB_BASE + $03     ; $C403 - Data Direction Register A
-
-; 6522 VIA #2 (Chip 2)
-VIA2_ORB    = MB_BASE + $80     ; $C480 - Output Register B (control)
-VIA2_ORA    = MB_BASE + $81     ; $C481 - Output Register A (data)
-VIA2_DDRB   = MB_BASE + $82     ; $C482 - Data Direction Register B
-VIA2_DDRA   = MB_BASE + $83     ; $C483 - Data Direction Register A
+.export mb_init, mb_reset, mb_write, mb_silence, mb_set_slot, mb_detect
 
 ;-----------------------------------------------------------------------------
 ; PSG Control Codes (directly drive BC1/BDIR via VIA ORB)
@@ -38,6 +20,8 @@ PSG_READ     = $05              ; BDIR=0, BC1=1 - Read Data
 .segment "ZEROPAGE"
 mb_reg:     .res 1              ; Current register number
 mb_val:     .res 1              ; Value to write
+via1_base:  .res 2              ; VIA #1 base address (chip 1)
+via2_base:  .res 2              ; VIA #2 base address (chip 2)
 
 ;-----------------------------------------------------------------------------
 ; Code segment
@@ -45,21 +29,80 @@ mb_val:     .res 1              ; Value to write
 .segment "CODE"
 
 ;-----------------------------------------------------------------------------
+; mb_set_slot - Set Mockingboard slot number
+; Input: A = slot number (1-7)
+;-----------------------------------------------------------------------------
+.proc mb_set_slot
+        ; Calculate VIA1 base: $C000 + (slot * $100)
+        ; Low byte is always $00
+        lda     #$00
+        sta     via1_base
+        sta     via2_base
+
+        ; High byte is $C0 + slot
+        txa                     ; X = slot number
+        clc
+        adc     #$C0
+        sta     via1_base+1
+
+        ; VIA2 is at base + $80, so same high byte
+        sta     via2_base+1
+
+        rts
+.endproc
+
+;-----------------------------------------------------------------------------
+; mb_detect - Detect Mockingboard in slot
+; Input: X = slot number (1-7)
+; Output: Carry clear = found, Carry set = not found
+;-----------------------------------------------------------------------------
+.proc mb_detect
+        ; Set up the slot
+        jsr     mb_set_slot
+
+        ; Try to detect 6522 VIA by writing/reading timer
+        ; Write to VIA timer latch and read back
+        ldy     #$04            ; Timer 1 low-order latch (offset $04)
+        lda     #$55            ; Test pattern
+        sta     (via1_base),y
+        lda     (via1_base),y
+        cmp     #$55
+        bne     @not_found
+
+        lda     #$AA            ; Another test pattern
+        sta     (via1_base),y
+        lda     (via1_base),y
+        cmp     #$AA
+        bne     @not_found
+
+        clc                     ; Found
+        rts
+
+@not_found:
+        sec                     ; Not found
+        rts
+.endproc
+
+;-----------------------------------------------------------------------------
 ; mb_init - Initialize Mockingboard
-; Initializes both 6522 VIAs and resets both PSG chips
+; Assumes mb_set_slot was called first
 ;-----------------------------------------------------------------------------
 .proc mb_init
         ; Initialize VIA #1
         lda     #$FF            ; All pins output
-        sta     VIA1_DDRA       ; Port A = output (data)
+        ldy     #$03            ; DDRA offset
+        sta     (via1_base),y
         lda     #$07            ; Bits 0-2 output (control)
-        sta     VIA1_DDRB       ; Port B = control signals
+        ldy     #$02            ; DDRB offset
+        sta     (via1_base),y
 
         ; Initialize VIA #2
         lda     #$FF
-        sta     VIA2_DDRA
+        ldy     #$03
+        sta     (via2_base),y
         lda     #$07
-        sta     VIA2_DDRB
+        ldy     #$02
+        sta     (via2_base),y
 
         ; Reset both PSG chips
         jsr     mb_reset
@@ -73,15 +116,17 @@ mb_val:     .res 1              ; Value to write
 .proc mb_reset
         ; Hardware reset pulse for PSG 1
         lda     #PSG_RESET
-        sta     VIA1_ORB
+        ldy     #$00            ; ORB offset
+        sta     (via1_base),y
         lda     #PSG_INACTIVE
-        sta     VIA1_ORB
+        sta     (via1_base),y
 
         ; Hardware reset pulse for PSG 2
         lda     #PSG_RESET
-        sta     VIA2_ORB
+        ldy     #$00
+        sta     (via2_base),y
         lda     #PSG_INACTIVE
-        sta     VIA2_ORB
+        sta     (via2_base),y
 
         ; Silence all channels
         jsr     mb_silence
@@ -140,13 +185,14 @@ mb_val:     .res 1              ; Value to write
 .endproc
 
 ;-----------------------------------------------------------------------------
-; mb_write - Write to PSG register (chip 1 only for now)
+; mb_write - Write to PSG register (both chips for stereo)
 ; Input: A = register, X = value
 ;-----------------------------------------------------------------------------
 .proc mb_write
         sta     mb_reg
         stx     mb_val
-        ; Fall through to write_psg1
+        jsr     write_psg1
+        jmp     write_psg2      ; Write same value to chip 2
 .endproc
 
 ;-----------------------------------------------------------------------------
@@ -155,42 +201,60 @@ mb_val:     .res 1              ; Value to write
 .proc write_psg1
         ; Latch register address
         lda     mb_reg
-        sta     VIA1_ORA        ; Put register number on data bus
+        ldy     #$01            ; ORA offset
+        sta     (via1_base),y
         lda     #PSG_LATCH
-        sta     VIA1_ORB        ; Latch it
+        ldy     #$00            ; ORB offset
+        sta     (via1_base),y
         lda     #PSG_INACTIVE
-        sta     VIA1_ORB        ; Deactivate
+        sta     (via1_base),y
 
         ; Write data
         lda     mb_val
-        sta     VIA1_ORA        ; Put value on data bus
+        ldy     #$01            ; ORA offset
+        sta     (via1_base),y
         lda     #PSG_WRITE
-        sta     VIA1_ORB        ; Write it
+        ldy     #$00            ; ORB offset
+        sta     (via1_base),y
         lda     #PSG_INACTIVE
-        sta     VIA1_ORB        ; Deactivate
+        sta     (via1_base),y
 
         rts
 .endproc
 
 ;-----------------------------------------------------------------------------
 ; write_psg2 - Write mb_val to register mb_reg on PSG chip 2
+; VIA2 is at via1_base + $80
 ;-----------------------------------------------------------------------------
 .proc write_psg2
+        ; Calculate VIA2 address (base + $80)
+        clc
+        lda     via1_base
+        adc     #$80
+        sta     via2_base
+        lda     via1_base+1
+        adc     #$00
+        sta     via2_base+1
+
         ; Latch register address
         lda     mb_reg
-        sta     VIA2_ORA
+        ldy     #$01            ; ORA offset
+        sta     (via2_base),y
         lda     #PSG_LATCH
-        sta     VIA2_ORB
+        ldy     #$00            ; ORB offset
+        sta     (via2_base),y
         lda     #PSG_INACTIVE
-        sta     VIA2_ORB
+        sta     (via2_base),y
 
         ; Write data
         lda     mb_val
-        sta     VIA2_ORA
+        ldy     #$01            ; ORA offset
+        sta     (via2_base),y
         lda     #PSG_WRITE
-        sta     VIA2_ORB
+        ldy     #$00            ; ORB offset
+        sta     (via2_base),y
         lda     #PSG_INACTIVE
-        sta     VIA2_ORB
+        sta     (via2_base),y
 
         rts
 .endproc
