@@ -8,8 +8,10 @@ Apple II Mockingboard music player that plays VGZ (compressed VGM) files from MS
 - Supports Mockingboard slots 4, 5, or 7
 - Stereo output (both PSG chips)
 - Loop support for continuous playback
-- Simple 3-channel audio visualizer
-- HGR title screen display
+- 3-channel volume visualizer (one bar per line)
+- HGR title screen on boot (skipped on menu return)
+- Auto-return to menu after song ends or ESC
+- DOS zero page save/restore for clean BASIC integration
 
 ## Requirements
 
@@ -29,10 +31,19 @@ Apple II Mockingboard music player that plays VGZ (compressed VGM) files from MS
 # Build player binary only
 make
 
-# Build complete disk image with all tracks
+# Convert all VGZ files to A2M format
+make convert
+
+# Convert title PNG to HGR image
+make image
+
+# Create disk image (requires pre-built assets)
 make disk
 
-# Convert specific VGZ file
+# Full build from scratch (convert + image + disk)
+make all-disk
+
+# Convert specific VGZ file and rebuild
 make play VGZ="vgz/01 Title.vgz"
 
 # Clean build artifacts
@@ -42,10 +53,12 @@ make clean
 ## Usage
 
 1. Boot the disk image in an Apple II emulator or real hardware
-2. Select Mockingboard slot (4, 5, or 7)
-3. Choose a song from the menu
-4. Press ESC to stop and return to menu
-5. Select 0 to quit
+2. Title screen is displayed on first boot
+3. Select Mockingboard slot (4, 5, or 7)
+4. Choose a song from the menu
+5. Press ESC to stop - automatically returns to menu
+6. Songs without loop also return to menu when finished
+7. Select 0 to quit
 
 ## File Structure
 
@@ -92,7 +105,9 @@ Data Stream:
 
 | Address | Size | Content |
 |---------|------|---------|
+| $0080-$009F | 32B | Zero page (saved/restored for DOS) |
 | $0300   | 1    | Slot number |
+| $0301   | 1    | Boot flag (1 = title shown) |
 | $0800   | -    | BASIC program |
 | $2000   | 8KB  | HGR title image |
 | $4000   | 20KB | Music data (A2M) |

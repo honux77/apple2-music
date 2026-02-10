@@ -121,9 +121,8 @@ zp_save:    .res 32             ; Buffer to save/restore DOS zero page $80-$9F
 @done:
         jsr     mb_silence      ; Silence the Mockingboard
         jsr     restore_zp      ; Restore DOS zero page state
-        jsr     HOME            ; Clear screen
-        jsr     show_hint       ; Show "TYPE RUN FOR MENU"
-        jmp     $03D0           ; DOS warm start - return to BASIC ]
+        jsr     dos_run_menu    ; Run HELLO via DOS command
+        jmp     $03D0           ; Fallback: return to BASIC ]
 .endproc
 
 ;-----------------------------------------------------------------------------
@@ -162,23 +161,6 @@ zp_save:    .res 32             ; Buffer to save/restore DOS zero page $80-$9F
         rts
 .endproc
 
-;-----------------------------------------------------------------------------
-; show_hint - Display hint message to return to menu
-;-----------------------------------------------------------------------------
-.proc show_hint
-        ldy     #0
-@loop:
-        lda     msg_hint,y
-        beq     @done
-        ora     #$80
-        jsr     COUT
-        iny
-        bne     @loop
-@done:
-        jsr     CROUT
-        jsr     CROUT
-        rts
-.endproc
 
 ;-----------------------------------------------------------------------------
 ; show_visualizer - Display simple volume bars for 3 channels
@@ -259,6 +241,27 @@ SCREEN_LINE10 = $0528            ; Line 10 of text screen (Channel C)
         rts
 .endproc
 
+
+;-----------------------------------------------------------------------------
+; dos_run_menu - Execute DOS "RUN HELLO" to return to menu
+; Must be called after restore_zp so DOS COUT hook works
+;-----------------------------------------------------------------------------
+.proc dos_run_menu
+        lda     #$84            ; CHR$(4) with high bit - DOS command prefix
+        jsr     COUT
+        ldy     #0
+@loop:
+        lda     msg_run,y
+        beq     @cr
+        ora     #$80            ; Set high bit for Apple II
+        jsr     COUT
+        iny
+        bne     @loop
+@cr:
+        lda     #$8D            ; CR with high bit - triggers DOS execution
+        jsr     COUT
+        rts                     ; (not reached - DOS takes over)
+.endproc
 
 ;-----------------------------------------------------------------------------
 ; save_zp / restore_zp - Preserve DOS 3.3 zero page state ($80-$9F)
@@ -459,9 +462,8 @@ msg_title:
 msg_playing:
         .byte   "PLAYING... (ESC TO STOP)", $00
 
-msg_hint:
-        .byte   "TYPE 'RUN' FOR MENU", $00
-
+msg_run:
+        .byte   "RUN HELLO", $00
 
 ;-----------------------------------------------------------------------------
 ; Music data location
