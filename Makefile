@@ -28,7 +28,7 @@ A2M_FILES = $(patsubst $(VGZ_DIR)/%.vgz,$(DATA_DIR)/%.a2m,$(VGZ_FILES))
 
 # Default target
 .PHONY: all
-all: $(DATA_DIR)/music.a2m $(TARGET)
+all: $(TARGET)
 
 # Create build directory
 $(BUILD_DIR):
@@ -65,7 +65,7 @@ $(DATA_DIR)/music.a2m: | $(DATA_DIR)
 $(BUILD_DIR)/startup.o: $(SRC_DIR)/startup.s | $(BUILD_DIR)
 	$(CA65) -o $@ $<
 
-$(BUILD_DIR)/player.o: $(SRC_DIR)/player.s $(DATA_DIR)/music.a2m | $(BUILD_DIR)
+$(BUILD_DIR)/player.o: $(SRC_DIR)/player.s | $(BUILD_DIR)
 	$(CA65) -o $@ $<
 
 $(BUILD_DIR)/mockingboard.o: $(SRC_DIR)/mockingboard.s | $(BUILD_DIR)
@@ -81,9 +81,9 @@ $(TARGET): $(BUILD_DIR)/startup.o $(BUILD_DIR)/player.o $(BUILD_DIR)/mockingboar
 # DOS 3.3 master disk (bootable base)
 DOS33_MASTER = $(TOOLS_DIR)/Apple_DOS_v3.3.dsk
 
-# Create disk image (requires AppleCommander)
+# Create disk image with all tracks (requires AppleCommander)
 .PHONY: disk
-disk: $(TARGET)
+disk: $(TARGET) convert
 	@if command -v java >/dev/null 2>&1 && [ -f "$(AC)" ]; then \
 		cp $(DOS33_MASTER) $(DISK_IMAGE); \
 		java -jar $(AC) -d $(DISK_IMAGE) HELLO 2>/dev/null || true; \
@@ -106,7 +106,31 @@ disk: $(TARGET)
 		java -jar $(AC) -d $(DISK_IMAGE) BOOT13 2>/dev/null || true; \
 		java -jar $(AC) -d $(DISK_IMAGE) SLOT# 2>/dev/null || true; \
 		tail -c +3 $(TARGET) | java -jar $(AC) -p $(DISK_IMAGE) PLAYER B 0x0803; \
-		echo '10 PRINT CHR$$(4);"BRUN PLAYER"' | java -jar $(AC) -bas $(DISK_IMAGE) HELLO; \
+		cat "$(DATA_DIR)/01 Title.a2m" | java -jar $(AC) -p $(DISK_IMAGE) TITLE B 0x4000; \
+		cat "$(DATA_DIR)/02 Game Start.a2m" | java -jar $(AC) -p $(DISK_IMAGE) GSTART B 0x4000; \
+		cat "$(DATA_DIR)/03 Main BGM 1.a2m" | java -jar $(AC) -p $(DISK_IMAGE) BGM1 B 0x4000; \
+		cat "$(DATA_DIR)/04 Boss.a2m" | java -jar $(AC) -p $(DISK_IMAGE) BOSS B 0x4000; \
+		cat "$(DATA_DIR)/05 Stage Select.a2m" | java -jar $(AC) -p $(DISK_IMAGE) STAGE B 0x4000; \
+		cat "$(DATA_DIR)/06 Main BGM 2.a2m" | java -jar $(AC) -p $(DISK_IMAGE) BGM2 B 0x4000; \
+		cat "$(DATA_DIR)/07 Last Boss.a2m" | java -jar $(AC) -p $(DISK_IMAGE) LASTBOSS B 0x4000; \
+		cat "$(DATA_DIR)/08 Ending.a2m" | java -jar $(AC) -p $(DISK_IMAGE) ENDING B 0x4000; \
+		cat "$(DATA_DIR)/09 Staff.a2m" | java -jar $(AC) -p $(DISK_IMAGE) STAFF B 0x4000; \
+		cat "$(DATA_DIR)/10 Death.a2m" | java -jar $(AC) -p $(DISK_IMAGE) DEATH B 0x4000; \
+		cat "$(DATA_DIR)/11 Game Over.a2m" | java -jar $(AC) -p $(DISK_IMAGE) GAMEOVER B 0x4000; \
+		$(PYTHON) $(TOOLS_DIR)/genmenu.py \
+			"$(DATA_DIR)/01 Title.a2m" \
+			"$(DATA_DIR)/02 Game Start.a2m" \
+			"$(DATA_DIR)/03 Main BGM 1.a2m" \
+			"$(DATA_DIR)/04 Boss.a2m" \
+			"$(DATA_DIR)/05 Stage Select.a2m" \
+			"$(DATA_DIR)/06 Main BGM 2.a2m" \
+			"$(DATA_DIR)/07 Last Boss.a2m" \
+			"$(DATA_DIR)/08 Ending.a2m" \
+			"$(DATA_DIR)/09 Staff.a2m" \
+			"$(DATA_DIR)/10 Death.a2m" \
+			"$(DATA_DIR)/11 Game Over.a2m" \
+			> $(BUILD_DIR)/menu.bas; \
+		cat $(BUILD_DIR)/menu.bas | java -jar $(AC) -bas $(DISK_IMAGE) HELLO; \
 		echo "Disk image created: $(DISK_IMAGE)"; \
 		java -jar $(AC) -l $(DISK_IMAGE); \
 	else \

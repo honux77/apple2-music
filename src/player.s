@@ -23,6 +23,9 @@ COUT         = $FDED            ; Character output
 CROUT        = $FD8E            ; Carriage return
 HOME         = $FC58            ; Clear screen
 
+; Slot number stored by BASIC at $0300
+SLOT_ADDR    = $0300
+
 ;-----------------------------------------------------------------------------
 ; Zero Page Variables
 ;-----------------------------------------------------------------------------
@@ -32,7 +35,6 @@ data_ptr:   .res 2              ; Pointer to current position in music data
 loop_ptr:   .res 2              ; Pointer to loop start position
 wait_count: .res 2              ; Frames to wait (16-bit)
 temp:       .res 1              ; Temporary storage
-slot_num:   .res 1              ; Selected slot number
 
 ;-----------------------------------------------------------------------------
 ; BSS segment (uninitialized data)
@@ -50,9 +52,20 @@ slot_num:   .res 1              ; Selected slot number
 .proc main
         jsr     HOME            ; Clear screen
         jsr     show_title
-        jsr     select_slot     ; Let user select slot
-        bcs     @exit           ; User cancelled
 
+        ; Read slot number from BASIC (stored at $0300)
+        ldx     SLOT_ADDR
+        cpx     #4
+        bcc     @use_default    ; < 4, use default
+        cpx     #8
+        bcs     @use_default    ; >= 8, use default
+        jmp     @set_slot
+
+@use_default:
+        ldx     #4              ; Default to slot 4
+
+@set_slot:
+        jsr     mb_set_slot     ; Set slot (X = slot number)
         jsr     mb_init         ; Initialize Mockingboard
 
         jsr     show_playing    ; Show "Playing..." message
@@ -114,85 +127,6 @@ slot_num:   .res 1              ; Selected slot number
 @done:
         jsr     CROUT
         jsr     CROUT
-        rts
-.endproc
-
-;-----------------------------------------------------------------------------
-; select_slot - Let user select Mockingboard slot
-; Output: Carry clear = slot selected, Carry set = cancelled
-;-----------------------------------------------------------------------------
-.proc select_slot
-        ; Display slot selection menu
-        ldy     #0
-@msg_loop:
-        lda     msg_slot,y
-        beq     @wait_key
-        ora     #$80
-        jsr     COUT
-        iny
-        bne     @msg_loop
-
-@wait_key:
-        ; Wait for keypress
-        lda     KEYBOARD
-        bpl     @wait_key
-        sta     KEYSTROBE
-
-        ; Check for ESC
-        cmp     #$9B
-        beq     @cancel
-
-        ; Check for '4' ($B4)
-        cmp     #$B4
-        beq     @slot4
-
-        ; Check for '5' ($B5)
-        cmp     #$B5
-        beq     @slot5
-
-        ; Check for '7' ($B7)
-        cmp     #$B7
-        beq     @slot7
-
-        ; Invalid key, try again
-        jmp     @wait_key
-
-@slot4:
-        ldx     #4
-        jmp     @set_slot
-@slot5:
-        ldx     #5
-        jmp     @set_slot
-@slot7:
-        ldx     #7
-        jmp     @set_slot
-
-@set_slot:
-        stx     slot_num
-        jsr     mb_set_slot     ; Set slot (X = slot number)
-
-        ; Show selected slot
-        jsr     CROUT
-        ldy     #0
-@sel_loop:
-        lda     msg_selected,y
-        beq     @show_num
-        ora     #$80
-        jsr     COUT
-        iny
-        bne     @sel_loop
-
-@show_num:
-        lda     slot_num
-        ora     #$B0            ; Convert to ASCII digit
-        jsr     COUT
-        jsr     CROUT
-
-        clc                     ; Success
-        rts
-
-@cancel:
-        sec                     ; Cancelled
         rts
 .endproc
 
@@ -369,22 +303,11 @@ msg_title:
         .byte   "MOCKINGBOARD MUSIC PLAYER", $0D
         .byte   "-------------------------", $00
 
-msg_slot:
-        .byte   "SELECT MOCKINGBOARD SLOT:", $0D, $0D
-        .byte   "  4 - SLOT 4", $0D
-        .byte   "  5 - SLOT 5", $0D
-        .byte   "  7 - SLOT 7", $0D, $0D
-        .byte   "  ESC - QUIT", $0D, $0D
-        .byte   "YOUR CHOICE: ", $00
-
-msg_selected:
-        .byte   "USING SLOT ", $00
-
 msg_playing:
         .byte   "PLAYING... (ESC TO STOP)", $00
 
 ;-----------------------------------------------------------------------------
-; Music data segment
+; Music data location
+; Music is loaded at $4000 by BASIC before calling player
 ;-----------------------------------------------------------------------------
-music_data:
-        .incbin "../data/music.a2m"
+music_data = $4000

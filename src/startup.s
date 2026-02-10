@@ -1,6 +1,6 @@
 ;-----------------------------------------------------------------------------
 ; Apple II Startup Code for Mockingboard Player
-; Creates a binary that can be BRUNned from ProDOS or DOS 3.3
+; Creates a binary that can be CALLed from BASIC
 ;-----------------------------------------------------------------------------
 
 .import main
@@ -9,7 +9,7 @@
 ; Header segment - Load address for Apple II DOS/ProDOS
 ;-----------------------------------------------------------------------------
 .segment "HEADER"
-        .word   $0803           ; Load address
+        .word   $6000           ; Load address
 
 ;-----------------------------------------------------------------------------
 ; Startup segment
@@ -17,31 +17,11 @@
 .segment "STARTUP"
 
 ;-----------------------------------------------------------------------------
-; Entry point - called when binary is BRUNned
+; Entry point - called via CALL 2051 from BASIC
 ;-----------------------------------------------------------------------------
 start:
-        ; Disable interrupts during playback
-        sei
-
-        ; Save current stack pointer
-        tsx
-        stx     save_sp
-
         ; Jump to main player code
         jsr     main
 
-        ; Restore stack pointer
-        ldx     save_sp
-        txs
-
-        ; Re-enable interrupts
-        cli
-
-        ; Return to caller (DOS/ProDOS)
+        ; Return to BASIC (CALL sets up return address)
         rts
-
-;-----------------------------------------------------------------------------
-; Data
-;-----------------------------------------------------------------------------
-save_sp:
-        .byte   $00
