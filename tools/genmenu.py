@@ -27,23 +27,26 @@ def generate_menu(a2m_files):
     """Generate Applesoft BASIC menu program"""
     lines = []
 
-    # Startup - slot selection (only once)
+    # Startup - show title image and slot selection (only once)
     lines.append('1 HOME')
     lines.append('2 PRINT "HONUX MUSIC PLAYER LOADING..."')
-    lines.append('3 FOR I = 1 TO 500 : NEXT I')
-    lines.append('4 IF PEEK(768) >= 4 AND PEEK(768) <= 7 THEN GOTO 15')
-    lines.append('5 HOME')
-    lines.append('6 PRINT "SELECT MOCKINGBOARD SLOT:"')
-    lines.append('7 PRINT : PRINT "  4 - SLOT 4"')
-    lines.append('8 PRINT "  5 - SLOT 5" : PRINT "  7 - SLOT 7"')
-    lines.append('9 PRINT : INPUT "YOUR CHOICE (4,5,7): ";S')
-    lines.append('10 IF S < 4 OR S > 7 THEN GOTO 5')
-    lines.append('11 IF S = 6 THEN GOTO 5')
-    lines.append('12 POKE 768,S')
+    lines.append('3 HGR')
+    lines.append('4 PRINT CHR$(4);"BLOAD TITLEIMG,A$2000"')
+    lines.append('5 FOR I = 1 TO 2000 : NEXT I')
+    lines.append('6 TEXT : HOME')
+    lines.append('7 IF PEEK(768) >= 4 AND PEEK(768) <= 7 THEN GOTO 20')
+    lines.append('8 HOME')
+    lines.append('9 PRINT "SELECT MOCKINGBOARD SLOT:"')
+    lines.append('10 PRINT : PRINT "  4 - SLOT 4"')
+    lines.append('11 PRINT "  5 - SLOT 5" : PRINT "  7 - SLOT 7"')
+    lines.append('12 PRINT : INPUT "YOUR CHOICE (4,5,7): ";S')
+    lines.append('13 IF S < 4 OR S > 7 THEN GOTO 8')
+    lines.append('14 IF S = 6 THEN GOTO 8')
+    lines.append('15 POKE 768,S')
 
     # Header - song menu
-    lines.append('15 HOME')
-    lines.append('20 PRINT "MOCKINGBOARD MUSIC PLAYER"')
+    lines.append('20 HOME')
+    lines.append('25 PRINT "MOCKINGBOARD MUSIC PLAYER"')
     lines.append('30 PRINT "========================="')
     lines.append('35 PRINT "        (SLOT ";PEEK(768);")"')
     lines.append('40 PRINT')
@@ -94,7 +97,7 @@ def generate_menu(a2m_files):
         lines.append(f'{base_line} PRINT CHR$(4);"BLOAD {dos_name},A$4000"')
         lines.append(f'{base_line + 10} PRINT CHR$(4);"BLOAD PLAYER,A$6000"')
         lines.append(f'{base_line + 20} CALL 24576')
-        lines.append(f'{base_line + 30} GOTO 15')
+        lines.append(f'{base_line + 30} GOTO 20')
 
     return '\n'.join(lines)
 
