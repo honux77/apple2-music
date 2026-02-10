@@ -105,7 +105,7 @@ disk: $(TARGET) convert
 		java -jar $(AC) -d $(DISK_IMAGE) START13 2>/dev/null || true; \
 		java -jar $(AC) -d $(DISK_IMAGE) BOOT13 2>/dev/null || true; \
 		java -jar $(AC) -d $(DISK_IMAGE) SLOT# 2>/dev/null || true; \
-		tail -c +3 $(TARGET) | java -jar $(AC) -p $(DISK_IMAGE) PLAYER B 0x6000; \
+		tail -c +3 $(TARGET) | java -jar $(AC) -p $(DISK_IMAGE) PLAYER B 0x9000; \
 		$(PYTHON) $(TOOLS_DIR)/png2hgr.py "$(VGZ_DIR)/Hinotori (MSX).png" "$(DATA_DIR)/title.hgr"; \
 		cat "$(DATA_DIR)/title.hgr" | java -jar $(AC) -p $(DISK_IMAGE) TITLEIMG B 0x2000; \
 		cat "$(DATA_DIR)/01 Title.a2m" | java -jar $(AC) -p $(DISK_IMAGE) TITLE B 0x4000; \

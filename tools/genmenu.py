@@ -90,13 +90,13 @@ def generate_menu(a2m_files):
     line_num += 10
 
     # Load routines for each song
-    # BLOAD music to $4000, BLOAD player to $6000, CALL player
-    # 24576 = $6000 in decimal
+    # BLOAD music to $4000, BLOAD player to $9000, CALL player
+    # 36864 = $9000 in decimal
     for i, (filename, display_name, dos_name) in enumerate(a2m_files, 1):
         base_line = 1000 + i * 100
         lines.append(f'{base_line} PRINT CHR$(4);"BLOAD {dos_name},A$4000"')
-        lines.append(f'{base_line + 10} PRINT CHR$(4);"BLOAD PLAYER,A$6000"')
-        lines.append(f'{base_line + 20} CALL 24576')
+        lines.append(f'{base_line + 10} PRINT CHR$(4);"BLOAD PLAYER,A$9000"')
+        lines.append(f'{base_line + 20} CALL 36864')
         lines.append(f'{base_line + 30} GOTO 20')
 
     return '\n'.join(lines)

@@ -9,7 +9,7 @@
 ; Header segment - Load address for Apple II DOS/ProDOS
 ;-----------------------------------------------------------------------------
 .segment "HEADER"
-        .word   $6000           ; Load address
+        .word   $9000           ; Load address
 
 ;-----------------------------------------------------------------------------
 ; Startup segment
