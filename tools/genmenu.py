@@ -27,13 +27,13 @@ def generate_menu(a2m_files):
     """Generate Applesoft BASIC menu program"""
     lines = []
 
-    # Startup - show title image and slot selection (only once)
-    lines.append('1 HOME')
-    lines.append('2 PRINT "HONUX MUSIC PLAYER LOADING..."')
-    lines.append('3 HGR')
-    lines.append('4 PRINT CHR$(4);"BLOAD TITLEIMG,A$2000"')
-    lines.append('5 FOR I = 1 TO 2000 : NEXT I')
-    lines.append('6 TEXT : HOME')
+    # Startup - show title image only on first boot
+    lines.append('1 IF PEEK(769) = 1 THEN GOTO 7')
+    lines.append('2 HOME')
+    lines.append('3 PRINT "HONUX MUSIC PLAYER LOADING..."')
+    lines.append('4 HGR')
+    lines.append('5 PRINT CHR$(4);"BLOAD TITLEIMG,A$2000"')
+    lines.append('6 FOR I = 1 TO 2000 : NEXT I : TEXT : HOME : POKE 769,1')
     lines.append('7 IF PEEK(768) >= 4 AND PEEK(768) <= 7 THEN GOTO 20')
     lines.append('8 HOME')
     lines.append('9 PRINT "SELECT MOCKINGBOARD SLOT:"')
