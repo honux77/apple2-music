@@ -44,6 +44,7 @@ bar_ptr:    .res 2              ; Pointer to screen line for bar drawing
 ; BSS segment (uninitialized data)
 ;-----------------------------------------------------------------------------
 .segment "BSS"
+zp_save:    .res 32             ; Buffer to save/restore DOS zero page $80-$9F
 
 ;-----------------------------------------------------------------------------
 ; Main Code
@@ -54,6 +55,7 @@ bar_ptr:    .res 2              ; Pointer to screen line for bar drawing
 ; Entry point
 ;-----------------------------------------------------------------------------
 .proc main
+        jsr     save_zp         ; Save DOS zero page state ($80-$9F)
         jsr     HOME            ; Clear screen
         jsr     show_title
 
@@ -118,8 +120,10 @@ bar_ptr:    .res 2              ; Pointer to screen line for bar drawing
 
 @done:
         jsr     mb_silence      ; Silence the Mockingboard
-@exit:
-        rts
+        jsr     restore_zp      ; Restore DOS zero page state
+        jsr     HOME            ; Clear screen
+        jsr     show_hint       ; Show "TYPE RUN FOR MENU"
+        jmp     $03D0           ; DOS warm start - return to BASIC ]
 .endproc
 
 ;-----------------------------------------------------------------------------
@@ -154,6 +158,24 @@ bar_ptr:    .res 2              ; Pointer to screen line for bar drawing
         iny
         bne     @loop
 @done:
+        jsr     CROUT
+        rts
+.endproc
+
+;-----------------------------------------------------------------------------
+; show_hint - Display hint message to return to menu
+;-----------------------------------------------------------------------------
+.proc show_hint
+        ldy     #0
+@loop:
+        lda     msg_hint,y
+        beq     @done
+        ora     #$80
+        jsr     COUT
+        iny
+        bne     @loop
+@done:
+        jsr     CROUT
         jsr     CROUT
         rts
 .endproc
@@ -234,6 +256,31 @@ SCREEN_LINE10 = $0528            ; Line 10 of text screen (Channel C)
         bne     @clear_loop
 
 @done:
+        rts
+.endproc
+
+
+;-----------------------------------------------------------------------------
+; save_zp / restore_zp - Preserve DOS 3.3 zero page state ($80-$9F)
+; DOS uses this area for file management; player must not corrupt it
+;-----------------------------------------------------------------------------
+.proc save_zp
+        ldx     #31
+@loop:
+        lda     $80,x
+        sta     zp_save,x
+        dex
+        bpl     @loop
+        rts
+.endproc
+
+.proc restore_zp
+        ldx     #31
+@loop:
+        lda     zp_save,x
+        sta     $80,x
+        dex
+        bpl     @loop
         rts
 .endproc
 
@@ -411,6 +458,10 @@ msg_title:
 
 msg_playing:
         .byte   "PLAYING... (ESC TO STOP)", $00
+
+msg_hint:
+        .byte   "TYPE 'RUN' FOR MENU", $00
+
 
 ;-----------------------------------------------------------------------------
 ; Music data location

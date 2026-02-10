@@ -81,10 +81,36 @@ $(TARGET): $(BUILD_DIR)/startup.o $(BUILD_DIR)/player.o $(BUILD_DIR)/mockingboar
 # DOS 3.3 master disk (bootable base)
 DOS33_MASTER = $(TOOLS_DIR)/Apple_DOS_v3.3.dsk
 
-# Create disk image with all tracks (requires AppleCommander)
+# Title image
+TITLE_PNG = $(VGZ_DIR)/Hinotori (MSX).png
+TITLE_HGR = $(DATA_DIR)/title.hgr
+
+# Convert title image (PNG to HGR)
+.PHONY: image
+image: | $(DATA_DIR)
+	$(PYTHON) $(TOOLS_DIR)/png2hgr.py "$(TITLE_PNG)" "$(TITLE_HGR)"
+	@echo "Title image created: $(TITLE_HGR)"
+
+# Create disk image using pre-built assets (requires AppleCommander)
+# Run 'make convert' and 'make image' first to generate assets
 .PHONY: disk
-disk: $(TARGET) convert
+disk: $(TARGET)
 	@if command -v java >/dev/null 2>&1 && [ -f "$(AC)" ]; then \
+		missing=""; \
+		for f in "$(DATA_DIR)/01 Title.a2m" "$(DATA_DIR)/02 Game Start.a2m" \
+			"$(DATA_DIR)/03 Main BGM 1.a2m" "$(DATA_DIR)/04 Boss.a2m" \
+			"$(DATA_DIR)/05 Stage Select.a2m" "$(DATA_DIR)/06 Main BGM 2.a2m" \
+			"$(DATA_DIR)/07 Last Boss.a2m" "$(DATA_DIR)/08 Ending.a2m" \
+			"$(DATA_DIR)/09 Staff.a2m" "$(DATA_DIR)/10 Death.a2m" \
+			"$(DATA_DIR)/11 Game Over.a2m"; do \
+			[ -f "$$f" ] || missing="$$missing  $$f\n"; \
+		done; \
+		if [ -n "$$missing" ]; then \
+			echo "Error: Missing A2M files:"; \
+			printf "$$missing"; \
+			echo "Run 'make convert' first to generate music data."; \
+			exit 1; \
+		fi; \
 		cp $(DOS33_MASTER) $(DISK_IMAGE); \
 		java -jar $(AC) -d $(DISK_IMAGE) HELLO 2>/dev/null || true; \
 		java -jar $(AC) -d $(DISK_IMAGE) APPLESOFT 2>/dev/null || true; \
@@ -106,8 +132,11 @@ disk: $(TARGET) convert
 		java -jar $(AC) -d $(DISK_IMAGE) BOOT13 2>/dev/null || true; \
 		java -jar $(AC) -d $(DISK_IMAGE) SLOT# 2>/dev/null || true; \
 		tail -c +3 $(TARGET) | java -jar $(AC) -p $(DISK_IMAGE) PLAYER B 0x9000; \
-		$(PYTHON) $(TOOLS_DIR)/png2hgr.py "$(VGZ_DIR)/Hinotori (MSX).png" "$(DATA_DIR)/title.hgr"; \
-		cat "$(DATA_DIR)/title.hgr" | java -jar $(AC) -p $(DISK_IMAGE) TITLEIMG B 0x2000; \
+		if [ -f "$(TITLE_HGR)" ]; then \
+			cat "$(TITLE_HGR)" | java -jar $(AC) -p $(DISK_IMAGE) TITLEIMG B 0x2000; \
+		else \
+			echo "Warning: $(TITLE_HGR) not found. Run 'make image' to generate."; \
+		fi; \
 		cat "$(DATA_DIR)/01 Title.a2m" | java -jar $(AC) -p $(DISK_IMAGE) TITLE B 0x4000; \
 		cat "$(DATA_DIR)/02 Game Start.a2m" | java -jar $(AC) -p $(DISK_IMAGE) GSTART B 0x4000; \
 		cat "$(DATA_DIR)/03 Main BGM 1.a2m" | java -jar $(AC) -p $(DISK_IMAGE) BGM1 B 0x4000; \
@@ -139,6 +168,10 @@ disk: $(TARGET) convert
 		echo "AppleCommander not found. Skipping disk image creation."; \
 		echo "Binary created at: $(TARGET)"; \
 	fi
+
+# Build everything from scratch (convert + image + disk)
+.PHONY: all-disk
+all-disk: convert image disk
 
 # Convert a specific VGZ file and rebuild
 # Usage: make play VGZ=vgz/song.vgz
@@ -179,10 +212,12 @@ help:
 	@echo "Apple II Mockingboard Music Player"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make              - Convert first VGZ and build player"
+	@echo "  make              - Build player binary"
 	@echo "  make convert      - Convert all VGZ files to A2M"
 	@echo "  make play VGZ=... - Convert specific VGZ and rebuild"
-	@echo "  make disk         - Create disk image (requires AppleCommander)"
+	@echo "  make image        - Convert title PNG to HGR format"
+	@echo "  make disk         - Create disk image (uses existing assets)"
+	@echo "  make all-disk     - Full build: convert + image + disk"
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make distclean    - Remove all generated files"
 	@echo "  make info         - Show file information"
