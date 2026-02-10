@@ -2,6 +2,8 @@
 
 Apple II Mockingboard music player that plays VGZ (compressed VGM) files from MSX games.
 
+[Play in Browser (apple2ts.com)](https://apple2ts.com/#https://github.com/honux77/apple2-music/raw/main/realeases/music-latest.dsk)
+
 ## Features
 
 - Plays AY-3-8910 PSG music from VGZ/VGM files
