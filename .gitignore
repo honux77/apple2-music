@@ -53,3 +53,12 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Apple II Music Player specific
+build/
+tools/ac.jar
+data/*.a2m
+*.lst
+
+# macOS
+.DS_Store

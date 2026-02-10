@@ -1,0 +1,255 @@
+;-----------------------------------------------------------------------------
+; Apple II Mockingboard Music Player
+; Plays .a2m format music files
+;-----------------------------------------------------------------------------
+
+.export main
+
+.import mb_init, mb_reset, mb_write, mb_silence
+
+;-----------------------------------------------------------------------------
+; A2M Format Constants
+;-----------------------------------------------------------------------------
+A2M_END      = $FE              ; End of song marker
+A2M_LOOP     = $FD              ; Loop start marker
+A2M_WAIT_EXT = $FF              ; Extended wait (followed by 2-byte count)
+
+;-----------------------------------------------------------------------------
+; Apple II System Addresses
+;-----------------------------------------------------------------------------
+KEYBOARD     = $C000            ; Keyboard data
+KEYSTROBE    = $C010            ; Keyboard strobe (clear)
+SPEAKER      = $C030            ; Speaker click (for debugging)
+
+;-----------------------------------------------------------------------------
+; Zero Page Variables
+;-----------------------------------------------------------------------------
+.segment "ZEROPAGE"
+
+data_ptr:   .res 2              ; Pointer to current position in music data
+loop_ptr:   .res 2              ; Pointer to loop start position
+wait_count: .res 2              ; Frames to wait (16-bit)
+temp:       .res 1              ; Temporary storage
+
+;-----------------------------------------------------------------------------
+; BSS segment (uninitialized data)
+;-----------------------------------------------------------------------------
+.segment "BSS"
+
+;-----------------------------------------------------------------------------
+; Main Code
+;-----------------------------------------------------------------------------
+.segment "CODE"
+
+;-----------------------------------------------------------------------------
+; Entry point
+;-----------------------------------------------------------------------------
+.proc main
+        jsr     mb_init         ; Initialize Mockingboard
+
+        ; Set up data pointer to music data
+        lda     #<music_data
+        sta     data_ptr
+        lda     #>music_data
+        sta     data_ptr+1
+
+        ; Clear loop pointer
+        lda     #$00
+        sta     loop_ptr
+        sta     loop_ptr+1
+
+        ; Skip A2M header (16 bytes)
+        clc
+        lda     data_ptr
+        adc     #16
+        sta     data_ptr
+        lda     data_ptr+1
+        adc     #0
+        sta     data_ptr+1
+
+        ; Main playback loop
+@play_loop:
+        jsr     play_frame      ; Process one frame of music data
+        bcs     @done           ; Carry set = end of song
+
+        jsr     wait_frame      ; Wait for next frame (60Hz timing)
+
+        ; Check for keypress to exit
+        lda     KEYBOARD
+        bpl     @play_loop      ; No key pressed, continue
+        sta     KEYSTROBE       ; Clear keyboard strobe
+
+        ; ESC key ($9B) exits
+        cmp     #$9B
+        bne     @play_loop
+
+@done:
+        jsr     mb_silence      ; Silence the Mockingboard
+        rts
+.endproc
+
+;-----------------------------------------------------------------------------
+; play_frame - Process music data until we hit a wait command
+; Output: Carry clear = continue, Carry set = end of song
+;-----------------------------------------------------------------------------
+.proc play_frame
+@next_byte:
+        ldy     #0
+        lda     (data_ptr),y    ; Get next byte
+
+        ; Check for special commands
+        cmp     #A2M_END
+        beq     @end_song
+
+        cmp     #A2M_LOOP
+        beq     @mark_loop
+
+        cmp     #A2M_WAIT_EXT
+        beq     @extended_wait
+
+        ; Check if it's a wait command ($80-$FD)
+        cmp     #$80
+        bcs     @short_wait
+
+        ; It's a register write ($00-$0D)
+        ; A = register number, save it
+        sta     temp            ; Save register number
+        jsr     inc_data_ptr    ; Move to value byte
+
+        ldy     #0
+        lda     (data_ptr),y    ; A = value
+        tax                     ; X = value
+        lda     temp            ; A = register
+
+        jsr     mb_write        ; Write to Mockingboard (A=reg, X=val)
+
+        jsr     inc_data_ptr    ; Move past value byte
+        jmp     @next_byte      ; Continue processing
+
+@short_wait:
+        ; Wait command: $80-$FD = wait 1-126 frames
+        sec
+        sbc     #$7F            ; Convert to frame count (1-126)
+        sta     wait_count
+        lda     #0
+        sta     wait_count+1
+
+        jsr     inc_data_ptr
+        clc                     ; Continue playing
+        rts
+
+@extended_wait:
+        ; Extended wait: $FF nn nn
+        jsr     inc_data_ptr
+        ldy     #0
+        lda     (data_ptr),y    ; Low byte of count
+        sta     wait_count
+        jsr     inc_data_ptr
+        ldy     #0
+        lda     (data_ptr),y    ; High byte of count
+        sta     wait_count+1
+        jsr     inc_data_ptr
+
+        clc                     ; Continue playing
+        rts
+
+@mark_loop:
+        ; Mark loop point
+        lda     data_ptr
+        sta     loop_ptr
+        lda     data_ptr+1
+        sta     loop_ptr+1
+
+        jsr     inc_data_ptr
+        jmp     @next_byte
+
+@end_song:
+        ; Check if we have a loop point
+        lda     loop_ptr
+        ora     loop_ptr+1
+        beq     @really_end     ; No loop, end song
+
+        ; Jump to loop point
+        lda     loop_ptr
+        sta     data_ptr
+        lda     loop_ptr+1
+        sta     data_ptr+1
+
+        jsr     inc_data_ptr    ; Skip the loop marker
+        jmp     @next_byte
+
+@really_end:
+        sec                     ; Signal end of song
+        rts
+.endproc
+
+;-----------------------------------------------------------------------------
+; inc_data_ptr - Increment data pointer
+;-----------------------------------------------------------------------------
+.proc inc_data_ptr
+        inc     data_ptr
+        bne     @done
+        inc     data_ptr+1
+@done:
+        rts
+.endproc
+
+;-----------------------------------------------------------------------------
+; dec_data_ptr - Decrement data pointer
+;-----------------------------------------------------------------------------
+.proc dec_data_ptr
+        lda     data_ptr
+        bne     @no_borrow
+        dec     data_ptr+1
+@no_borrow:
+        dec     data_ptr
+        rts
+.endproc
+
+;-----------------------------------------------------------------------------
+; wait_frame - Wait for approximately 1/60th second
+; Uses CPU cycle counting for timing
+; Apple II runs at ~1.023 MHz, so 1/60 sec = ~17050 cycles
+;-----------------------------------------------------------------------------
+.proc wait_frame
+        ; Check if we need to wait multiple frames
+@frame_loop:
+        lda     wait_count
+        ora     wait_count+1
+        beq     @done           ; No more frames to wait
+
+        ; Decrement frame counter
+        lda     wait_count
+        bne     @no_borrow
+        dec     wait_count+1
+@no_borrow:
+        dec     wait_count
+
+        ; Wait approximately 17050 cycles (1/60 sec at 1.023 MHz)
+        ; Outer loop: 256 iterations
+        ; Inner loop: ~66 cycles per outer iteration = 16896 cycles
+        ldx     #0              ; 2 cycles
+@outer:
+        ldy     #13             ; 2 cycles
+@inner:
+        dey                     ; 2 cycles
+        bne     @inner          ; 3 cycles (taken), 2 (not taken)
+                                ; Inner: 13 * 5 - 1 = 64 cycles
+        dex                     ; 2 cycles
+        bne     @outer          ; 3 cycles (taken)
+                                ; Outer: 256 * (64 + 2 + 2 + 3) = 18176 cycles
+                                ; Close enough to 17050
+
+        jmp     @frame_loop
+
+@done:
+        rts
+.endproc
+
+;-----------------------------------------------------------------------------
+; Music data segment
+;-----------------------------------------------------------------------------
+.segment "RODATA"
+
+music_data:
+        .incbin "../data/music.a2m"
