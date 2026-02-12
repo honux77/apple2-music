@@ -28,27 +28,18 @@ def generate_menu(a2m_files):
     lines = []
 
     # Startup - show title image only on first boot
-    lines.append('1 IF PEEK(769) = 1 THEN GOTO 7')
+    lines.append('1 IF PEEK(769) = 1 THEN GOTO 20')
     lines.append('2 HOME')
     lines.append('3 PRINT "HONUX MUSIC PLAYER LOADING..."')
     lines.append('4 HGR')
     lines.append('5 PRINT CHR$(4);"BLOAD TITLEIMG,A$2000"')
     lines.append('6 FOR I = 1 TO 2000 : NEXT I : TEXT : HOME : POKE 769,1')
-    lines.append('7 IF PEEK(768) >= 4 AND PEEK(768) <= 7 THEN GOTO 20')
-    lines.append('8 HOME')
-    lines.append('9 PRINT "SELECT MOCKINGBOARD SLOT:"')
-    lines.append('10 PRINT : PRINT "  4 - SLOT 4"')
-    lines.append('11 PRINT "  5 - SLOT 5" : PRINT "  7 - SLOT 7"')
-    lines.append('12 PRINT : INPUT "YOUR CHOICE (4,5,7): ";S')
-    lines.append('13 IF S < 4 OR S > 7 THEN GOTO 8')
-    lines.append('14 IF S = 6 THEN GOTO 8')
-    lines.append('15 POKE 768,S')
 
     # Header - song menu
     lines.append('20 HOME')
     lines.append('25 PRINT "   HONUX MUSIC PLAYER"')
     lines.append('30 PRINT "   =================="')
-    lines.append('35 PRINT "        (SLOT ";PEEK(768);")"')
+    lines.append('35 IF PEEK(768) >= 1 AND PEEK(768) <= 7 THEN PRINT "        (SLOT ";PEEK(768);")"')
     lines.append('40 PRINT')
     lines.append('50 PRINT "SELECT A SONG:"')
     lines.append('60 PRINT')

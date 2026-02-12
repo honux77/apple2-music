@@ -23,7 +23,7 @@ COUT         = $FDED            ; Character output
 CROUT        = $FD8E            ; Carriage return
 HOME         = $FC58            ; Clear screen
 
-; Slot number stored by BASIC at $0300
+; Slot number stored at $0300 (written by auto-detect for menu display)
 SLOT_ADDR    = $0300
 
 ;-----------------------------------------------------------------------------
@@ -59,19 +59,25 @@ zp_save:    .res 32             ; Buffer to save/restore DOS zero page $80-$9F
         jsr     HOME            ; Clear screen
         jsr     show_title
 
-        ; Read slot number from BASIC (stored at $0300)
-        ldx     SLOT_ADDR
-        cpx     #4
-        bcc     @use_default    ; < 4, use default
-        cpx     #8
-        bcs     @use_default    ; >= 8, use default
-        jmp     @set_slot
+        ; Auto-detect Mockingboard (scan slots 4, 5, 7)
+        ldx     #4
+        jsr     mb_detect
+        bcc     @found
+        ldx     #5
+        jsr     mb_detect
+        bcc     @found
+        ldx     #7
+        jsr     mb_detect
+        bcc     @found
 
-@use_default:
-        ldx     #4              ; Default to slot 4
+        ; Not found - show error and return to menu
+        jsr     show_not_found
+        jsr     restore_zp
+        jsr     dos_run_menu
+        jmp     $03D0
 
-@set_slot:
-        jsr     mb_set_slot     ; Set slot (X = slot number)
+@found:
+        stx     SLOT_ADDR       ; Store detected slot for menu display
         jsr     mb_init         ; Initialize Mockingboard
 
         jsr     show_playing    ; Show "Playing..." message
@@ -140,6 +146,30 @@ zp_save:    .res 32             ; Buffer to save/restore DOS zero page $80-$9F
 @done:
         jsr     CROUT
         jsr     CROUT
+        rts
+.endproc
+
+;-----------------------------------------------------------------------------
+; show_not_found - Display Mockingboard not found error
+;-----------------------------------------------------------------------------
+.proc show_not_found
+        jsr     CROUT
+        ldy     #0
+@loop:
+        lda     msg_not_found,y
+        beq     @done
+        ora     #$80
+        jsr     COUT
+        iny
+        bne     @loop
+@done:
+        jsr     CROUT
+        ; Wait for keypress before returning to menu
+        lda     KEYSTROBE       ; Clear any pending key
+@wait:
+        lda     KEYBOARD
+        bpl     @wait
+        sta     KEYSTROBE
         rts
 .endproc
 
@@ -461,6 +491,10 @@ msg_title:
 
 msg_playing:
         .byte   "PLAYING... (ESC TO STOP)", $00
+
+msg_not_found:
+        .byte   "MOCKINGBOARD NOT FOUND!", $0D
+        .byte   "PRESS ANY KEY...", $00
 
 msg_run:
         .byte   "RUN HELLO", $00
