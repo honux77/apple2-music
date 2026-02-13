@@ -62,6 +62,7 @@ zp_save:    .res 32             ; Buffer to save/restore DOS zero page $80-$9F
         ; Use Mockingboard in slot 4 (fixed)
         ldx     #4
         stx     SLOT_ADDR       ; Store slot for menu display
+        jsr     mb_set_slot     ; Set VIA base addresses for slot 4
         jsr     mb_init         ; Initialize Mockingboard
 
         jsr     show_playing    ; Show "Playing..." message
