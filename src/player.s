@@ -5,7 +5,7 @@
 
 .export main
 
-.import mb_init, mb_reset, mb_write, mb_silence, mb_set_slot, mb_detect
+.import mb_init, mb_reset, mb_write, mb_silence, mb_set_slot
 
 ;-----------------------------------------------------------------------------
 ; A2M Format Constants
@@ -59,25 +59,9 @@ zp_save:    .res 32             ; Buffer to save/restore DOS zero page $80-$9F
         jsr     HOME            ; Clear screen
         jsr     show_title
 
-        ; Auto-detect Mockingboard (scan slots 4, 5, 7)
+        ; Use Mockingboard in slot 4 (fixed)
         ldx     #4
-        jsr     mb_detect
-        bcc     @found
-        ldx     #5
-        jsr     mb_detect
-        bcc     @found
-        ldx     #7
-        jsr     mb_detect
-        bcc     @found
-
-        ; Not found - show error and return to menu
-        jsr     show_not_found
-        jsr     restore_zp
-        jsr     dos_run_menu
-        jmp     $03D0
-
-@found:
-        stx     SLOT_ADDR       ; Store detected slot for menu display
+        stx     SLOT_ADDR       ; Store slot for menu display
         jsr     mb_init         ; Initialize Mockingboard
 
         jsr     show_playing    ; Show "Playing..." message

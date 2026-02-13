@@ -28,7 +28,8 @@
       "Bash(file:*)",
       "Bash(pip3 install:*)",
       "Bash(git tag:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(brew install:*)"
     ]
   }
 }
