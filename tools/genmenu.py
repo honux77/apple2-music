@@ -114,6 +114,9 @@ def main():
 
         # Get DOS name from mapping
         dos_name = DOS_NAMES.get(filename, filename[:8].upper().replace(' ', ''))
+        # Apple DOS 3.3 filenames must start with a letter
+        if dos_name and not dos_name[0].isalpha():
+            dos_name = 'A' + dos_name[:7]
 
         # Create display name (remove leading numbers)
         display = filename

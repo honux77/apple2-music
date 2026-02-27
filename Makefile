@@ -1,5 +1,5 @@
 # Apple II Mockingboard Music Player - Makefile
-# Converts VGZ files to A2M format and builds the player
+# music/ 하위 각 앨범 폴더마다 별도 디스크 이미지를 생성합니다.
 
 # Tools
 PYTHON = python3
@@ -8,60 +8,44 @@ LD65 = ld65
 AC = $(TOOLS_DIR)/ac.jar
 
 # Directories
-SRC_DIR = src
-TOOLS_DIR = tools
-DATA_DIR = data
-VGZ_DIR = vgz
-BUILD_DIR = build
+SRC_DIR    = src
+TOOLS_DIR  = tools
+DATA_DIR   = data
+MUSIC_DIR  = music
+BUILD_DIR  = build
 
 # Source files
 ASM_SRCS = $(SRC_DIR)/startup.s $(SRC_DIR)/player.s $(SRC_DIR)/mockingboard.s
 CFG_FILE = $(SRC_DIR)/apple2.cfg
 
-# Output
+# Output binary
 TARGET = $(BUILD_DIR)/player.bin
-DISK_IMAGE = $(BUILD_DIR)/music.dsk
 
-# VGZ files to convert
-VGZ_FILES = $(wildcard $(VGZ_DIR)/*.vgz)
-A2M_FILES = $(patsubst $(VGZ_DIR)/%.vgz,$(DATA_DIR)/%.a2m,$(VGZ_FILES))
+# DOS 3.3 master disk (bootable base)
+DOS33_MASTER = $(TOOLS_DIR)/Apple_DOS_v3.3.dsk
 
-# Default target
+# Discover album subdirectories under music/
+ALBUMS      = $(notdir $(wildcard $(MUSIC_DIR)/*))
+DISK_IMAGES = $(patsubst %,$(BUILD_DIR)/%.dsk,$(ALBUMS))
+
+# ------------------------------------------------------------------ #
+# Default target: build player binary only
+# ------------------------------------------------------------------ #
 .PHONY: all
 all: $(TARGET)
 
-# Create build directory
+# ------------------------------------------------------------------ #
+# Create directories
+# ------------------------------------------------------------------ #
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-# Create data directory
 $(DATA_DIR):
 	mkdir -p $(DATA_DIR)
 
-# Convert VGZ to A2M
-$(DATA_DIR)/%.a2m: $(VGZ_DIR)/%.vgz | $(DATA_DIR)
-	$(PYTHON) $(TOOLS_DIR)/vgz2a2m.py "$<" "$@"
-
-# Convert all VGZ files (handles spaces in filenames)
-.PHONY: convert
-convert:
-	@for f in $(VGZ_DIR)/*.vgz; do \
-		base=$$(basename "$$f" .vgz); \
-		$(PYTHON) $(TOOLS_DIR)/vgz2a2m.py "$$f" "$(DATA_DIR)/$$base.a2m"; \
-	done
-
-# Create a default/placeholder music file if needed
-$(DATA_DIR)/music.a2m: | $(DATA_DIR)
-	@if [ ! -f "$@" ]; then \
-		if [ -n "$(firstword $(VGZ_FILES))" ]; then \
-			$(PYTHON) $(TOOLS_DIR)/vgz2a2m.py "$(firstword $(VGZ_FILES))" "$@"; \
-		else \
-			echo "Creating placeholder music file..."; \
-			printf 'A2M\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFE\x00' > "$@"; \
-		fi \
-	fi
-
-# Assemble source files
+# ------------------------------------------------------------------ #
+# Assemble
+# ------------------------------------------------------------------ #
 $(BUILD_DIR)/startup.o: $(SRC_DIR)/startup.s | $(BUILD_DIR)
 	$(CA65) -o $@ $<
 
@@ -71,156 +55,112 @@ $(BUILD_DIR)/player.o: $(SRC_DIR)/player.s | $(BUILD_DIR)
 $(BUILD_DIR)/mockingboard.o: $(SRC_DIR)/mockingboard.s | $(BUILD_DIR)
 	$(CA65) -o $@ $<
 
+# ------------------------------------------------------------------ #
 # Link
+# ------------------------------------------------------------------ #
 $(TARGET): $(BUILD_DIR)/startup.o $(BUILD_DIR)/player.o $(BUILD_DIR)/mockingboard.o $(CFG_FILE)
 	$(LD65) -C $(CFG_FILE) -o $@ \
 		$(BUILD_DIR)/startup.o \
 		$(BUILD_DIR)/player.o \
 		$(BUILD_DIR)/mockingboard.o
 
-# DOS 3.3 master disk (bootable base)
-DOS33_MASTER = $(TOOLS_DIR)/Apple_DOS_v3.3.dsk
-
-# Title image
-TITLE_PNG = $(VGZ_DIR)/Hinotori (MSX).png
-TITLE_HGR = $(DATA_DIR)/title.hgr
-
-# Convert title image (PNG to HGR)
-.PHONY: image
-image: | $(DATA_DIR)
-	$(PYTHON) $(TOOLS_DIR)/png2hgr.py "$(TITLE_PNG)" "$(TITLE_HGR)"
-	@echo "Title image created: $(TITLE_HGR)"
-
-# Create disk image using pre-built assets (requires AppleCommander)
-# Run 'make convert' and 'make image' first to generate assets
-.PHONY: disk
-disk: $(TARGET)
-	@if command -v java >/dev/null 2>&1 && [ -f "$(AC)" ]; then \
-		missing=""; \
-		for f in "$(DATA_DIR)/01 Title.a2m" "$(DATA_DIR)/02 Game Start.a2m" \
-			"$(DATA_DIR)/03 Main BGM 1.a2m" "$(DATA_DIR)/04 Boss.a2m" \
-			"$(DATA_DIR)/05 Stage Select.a2m" "$(DATA_DIR)/06 Main BGM 2.a2m" \
-			"$(DATA_DIR)/07 Last Boss.a2m" "$(DATA_DIR)/08 Ending.a2m" \
-			"$(DATA_DIR)/09 Staff.a2m" "$(DATA_DIR)/10 Death.a2m" \
-			"$(DATA_DIR)/11 Game Over.a2m"; do \
-			[ -f "$$f" ] || missing="$$missing  $$f\n"; \
+# ------------------------------------------------------------------ #
+# Convert all albums' VGZ files to A2M (without building disks)
+# ------------------------------------------------------------------ #
+.PHONY: convert
+convert:
+	@for dir in $(MUSIC_DIR)/*/; do \
+		album=$$(basename "$$dir"); \
+		mkdir -p "$(DATA_DIR)/$$album"; \
+		for f in "$$dir"*.vgz; do \
+			[ -f "$$f" ] || continue; \
+			base=$$(basename "$$f" .vgz); \
+			echo "Converting: $$f"; \
+			$(PYTHON) $(TOOLS_DIR)/vgz2a2m.py "$$f" "$(DATA_DIR)/$$album/$$base.a2m"; \
 		done; \
-		if [ -n "$$missing" ]; then \
-			echo "Error: Missing A2M files:"; \
-			printf "$$missing"; \
-			echo "Run 'make convert' first to generate music data."; \
-			exit 1; \
-		fi; \
-		cp $(DOS33_MASTER) $(DISK_IMAGE); \
-		java -jar $(AC) -d $(DISK_IMAGE) HELLO 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) APPLESOFT 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) LOADER.OBJ0 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) FPBASIC 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) INTBASIC 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) MASTER 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) "MASTER CREATE" 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) COPY 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) COPY.OBJ0 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) COPYA 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) CHAIN 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) RENUMBER 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) FILEM 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) FID 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) CONVERT13 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) MUFFIN 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) START13 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) BOOT13 2>/dev/null || true; \
-		java -jar $(AC) -d $(DISK_IMAGE) SLOT# 2>/dev/null || true; \
-		tail -c +3 $(TARGET) | java -jar $(AC) -p $(DISK_IMAGE) PLAYER B 0x9000; \
-		if [ -f "$(TITLE_HGR)" ]; then \
-			cat "$(TITLE_HGR)" | java -jar $(AC) -p $(DISK_IMAGE) TITLEIMG B 0x2000; \
-		else \
-			echo "Warning: $(TITLE_HGR) not found. Run 'make image' to generate."; \
-		fi; \
-		cat "$(DATA_DIR)/01 Title.a2m" | java -jar $(AC) -p $(DISK_IMAGE) TITLE B 0x4000; \
-		cat "$(DATA_DIR)/02 Game Start.a2m" | java -jar $(AC) -p $(DISK_IMAGE) GSTART B 0x4000; \
-		cat "$(DATA_DIR)/03 Main BGM 1.a2m" | java -jar $(AC) -p $(DISK_IMAGE) BGM1 B 0x4000; \
-		cat "$(DATA_DIR)/04 Boss.a2m" | java -jar $(AC) -p $(DISK_IMAGE) BOSS B 0x4000; \
-		cat "$(DATA_DIR)/05 Stage Select.a2m" | java -jar $(AC) -p $(DISK_IMAGE) STAGE B 0x4000; \
-		cat "$(DATA_DIR)/06 Main BGM 2.a2m" | java -jar $(AC) -p $(DISK_IMAGE) BGM2 B 0x4000; \
-		cat "$(DATA_DIR)/07 Last Boss.a2m" | java -jar $(AC) -p $(DISK_IMAGE) LASTBOSS B 0x4000; \
-		cat "$(DATA_DIR)/08 Ending.a2m" | java -jar $(AC) -p $(DISK_IMAGE) ENDING B 0x4000; \
-		cat "$(DATA_DIR)/09 Staff.a2m" | java -jar $(AC) -p $(DISK_IMAGE) STAFF B 0x4000; \
-		cat "$(DATA_DIR)/10 Death.a2m" | java -jar $(AC) -p $(DISK_IMAGE) DEATH B 0x4000; \
-		cat "$(DATA_DIR)/11 Game Over.a2m" | java -jar $(AC) -p $(DISK_IMAGE) GAMEOVER B 0x4000; \
-		$(PYTHON) $(TOOLS_DIR)/genmenu.py \
-			"$(DATA_DIR)/01 Title.a2m" \
-			"$(DATA_DIR)/02 Game Start.a2m" \
-			"$(DATA_DIR)/03 Main BGM 1.a2m" \
-			"$(DATA_DIR)/04 Boss.a2m" \
-			"$(DATA_DIR)/05 Stage Select.a2m" \
-			"$(DATA_DIR)/06 Main BGM 2.a2m" \
-			"$(DATA_DIR)/07 Last Boss.a2m" \
-			"$(DATA_DIR)/08 Ending.a2m" \
-			"$(DATA_DIR)/09 Staff.a2m" \
-			"$(DATA_DIR)/10 Death.a2m" \
-			"$(DATA_DIR)/11 Game Over.a2m" \
-			> $(BUILD_DIR)/menu.bas; \
-		cat $(BUILD_DIR)/menu.bas | java -jar $(AC) -bas $(DISK_IMAGE) HELLO; \
-		echo "Disk image created: $(DISK_IMAGE)"; \
-		java -jar $(AC) -l $(DISK_IMAGE); \
+	done
+
+# ------------------------------------------------------------------ #
+# Per-album disk image  (e.g. build/firebird.dsk, build/msx-best.dsk)
+# Runs convert + image + disk all-in-one via build_disk.py
+# ------------------------------------------------------------------ #
+$(BUILD_DIR)/%.dsk: $(TARGET) | $(BUILD_DIR)
+	@if command -v java >/dev/null 2>&1 && [ -f "$(AC)" ]; then \
+		$(PYTHON) $(TOOLS_DIR)/build_disk.py \
+			"$(MUSIC_DIR)/$*" \
+			"$(DATA_DIR)/$*" \
+			"$@" \
+			"$(TARGET)" \
+			"$(AC)" \
+			"$(DOS33_MASTER)" \
+			"$(TOOLS_DIR)"; \
 	else \
-		echo "AppleCommander not found. Skipping disk image creation."; \
-		echo "Binary created at: $(TARGET)"; \
+		echo "AppleCommander ($(AC)) not found. Skipping disk image."; \
 	fi
 
-# Build everything from scratch (convert + image + disk)
-.PHONY: all-disk
-all-disk: convert image disk
+# ------------------------------------------------------------------ #
+# Convenient short aliases:  make disk-firebird  make disk-msx-best
+# ------------------------------------------------------------------ #
+disk-%: $(BUILD_DIR)/%.dsk
+	@true
 
-# Convert a specific VGZ file and rebuild
-# Usage: make play VGZ=vgz/song.vgz
+# ------------------------------------------------------------------ #
+# Build all disk images (one per album)
+# ------------------------------------------------------------------ #
+.PHONY: all-disks disk
+all-disks disk: $(TARGET) $(DISK_IMAGES)
+
+# ------------------------------------------------------------------ #
+# Play a specific VGZ file (quick test without full disk build)
+# Usage: make play VGZ="music/firebird/01 Title.vgz"
+# ------------------------------------------------------------------ #
 .PHONY: play
 play:
 ifdef VGZ
 	$(PYTHON) $(TOOLS_DIR)/vgz2a2m.py "$(VGZ)" $(DATA_DIR)/music.a2m
 	$(MAKE) clean-obj $(TARGET)
 else
-	@echo "Usage: make play VGZ=vgz/song.vgz"
+	@echo "Usage: make play VGZ=\"music/<album>/<file>.vgz\""
 endif
 
-# Clean build artifacts
+# ------------------------------------------------------------------ #
+# Clean
+# ------------------------------------------------------------------ #
 .PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR)
 
-# Clean only object files (keep binary)
 .PHONY: clean-obj
 clean-obj:
 	rm -f $(BUILD_DIR)/*.o
 
-# Clean everything including converted files
 .PHONY: distclean
 distclean: clean
-	rm -f $(DATA_DIR)/*.a2m
+	rm -rf $(DATA_DIR)
 
-# Show info
+# ------------------------------------------------------------------ #
+# Info / Help
+# ------------------------------------------------------------------ #
 .PHONY: info
 info:
-	@echo "VGZ files found: $(VGZ_FILES)"
-	@echo "A2M files to create: $(A2M_FILES)"
-	@echo "Target binary: $(TARGET)"
+	@echo "Albums    : $(ALBUMS)"
+	@echo "Disk images: $(DISK_IMAGES)"
+	@echo "Binary    : $(TARGET)"
 
-# Help
 .PHONY: help
 help:
 	@echo "Apple II Mockingboard Music Player"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make              - Build player binary"
-	@echo "  make convert      - Convert all VGZ files to A2M"
-	@echo "  make play VGZ=... - Convert specific VGZ and rebuild"
-	@echo "  make image        - Convert title PNG to HGR format"
-	@echo "  make disk         - Create disk image (uses existing assets)"
-	@echo "  make all-disk     - Full build: convert + image + disk"
-	@echo "  make clean        - Remove build artifacts"
-	@echo "  make distclean    - Remove all generated files"
-	@echo "  make info         - Show file information"
+	@echo "  make                  - Build player binary"
+	@echo "  make convert          - Convert all VGZ files to A2M (per album)"
+	@echo "  make all-disks        - Build a disk image for each album"
+	@echo "  make disk-<album>     - Build disk for one album (e.g. make disk-firebird)"
+	@echo "  make build/<album>.dsk- Same as above"
+	@echo "  make play VGZ=<path>  - Quick-test one VGZ file"
+	@echo "  make clean            - Remove build artifacts"
+	@echo "  make distclean        - Remove all generated files"
+	@echo "  make info             - Show discovered albums"
 	@echo ""
-	@echo "Example:"
-	@echo "  make play VGZ=\"vgz/01 Title.vgz\""
+	@echo "Albums found under $(MUSIC_DIR)/:"
+	@for d in $(MUSIC_DIR)/*/; do echo "  - $$(basename $$d)"; done
